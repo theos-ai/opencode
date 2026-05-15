@@ -216,6 +216,7 @@ export const layer: Layer.Layer<
 
         yield* config.get()
         const questionEnabled = ["app", "cli", "desktop"].includes(flags.client) || flags.enableQuestionTool
+        const planExitEnabled = flags.experimentalPlanMode && ["app", "cli", "desktop"].includes(flags.client)
 
         const tool = yield* Effect.all({
           invalid: Tool.init(invalid),
@@ -259,7 +260,7 @@ export const layer: Layer.Layer<
             tool.skill,
             tool.patch,
             ...(flags.experimentalLspTool ? [tool.lsp] : []),
-            ...(flags.experimentalPlanMode && flags.client === "cli" ? [tool.plan] : []),
+            ...(planExitEnabled ? [tool.plan] : []),
           ],
           task: tool.task,
           read: tool.read,

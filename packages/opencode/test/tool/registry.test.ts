@@ -70,12 +70,33 @@ const scout = testEffect(Layer.mergeAll(registryLayer({ experimentalScout: true 
 const background = testEffect(
   Layer.mergeAll(registryLayer({ experimentalBackgroundSubagents: true }), node, Agent.defaultLayer),
 )
+const planApp = testEffect(
+  Layer.mergeAll(registryLayer({ experimentalPlanMode: true, client: "app" }), node, Agent.defaultLayer),
+)
 
 afterEach(async () => {
   await disposeAllInstances()
 })
 
 describe("tool.registry", () => {
+  it.instance("hides plan_exit unless experimental plan mode is enabled", () =>
+    Effect.gen(function* () {
+      const registry = yield* ToolRegistry.Service
+      const ids = yield* registry.ids()
+
+      expect(ids).not.toContain("plan_exit")
+    }),
+  )
+
+  planApp.instance("shows plan_exit for the app runtime client when plan mode is enabled", () =>
+    Effect.gen(function* () {
+      const registry = yield* ToolRegistry.Service
+      const ids = yield* registry.ids()
+
+      expect(ids).toContain("plan_exit")
+    }),
+  )
+
   it.instance("hides repo research tools unless experimental", () =>
     Effect.gen(function* () {
       const registry = yield* ToolRegistry.Service

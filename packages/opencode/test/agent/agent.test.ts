@@ -70,6 +70,9 @@ it.instance("build agent has correct default properties", () =>
     expect(build?.native).toBe(true)
     expect(evalPerm(build, "edit")).toBe("allow")
     expect(evalPerm(build, "bash")).toBe("allow")
+    expect(evalPerm(build, "question")).toBe("allow")
+    expect(evalPerm(build, "plan_enter")).toBe("allow")
+    expect(evalPerm(build, "plan_exit")).toBe("deny")
     expect(evalPerm(build, "repo_clone")).toBe("deny")
     expect(evalPerm(build, "repo_overview")).toBe("deny")
   }),
@@ -81,6 +84,8 @@ it.instance("plan agent denies edits except .opencode/plans/*", () =>
     expect(plan).toBeDefined()
     // Wildcard is denied
     expect(evalPerm(plan, "edit")).toBe("deny")
+    expect(evalPerm(plan, "question")).toBe("allow")
+    expect(evalPerm(plan, "plan_exit")).toBe("allow")
     // But specific path is allowed
     expect(Permission.evaluate("edit", ".opencode/plans/foo.md", plan!.permission).action).toBe("allow")
   }),

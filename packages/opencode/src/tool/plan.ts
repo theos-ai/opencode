@@ -8,8 +8,21 @@ import { Provider } from "@/provider/provider"
 import { InstanceState } from "@/effect/instance-state"
 import { MessageID, PartID } from "../session/schema"
 import EXIT_DESCRIPTION from "./plan-exit.txt"
+import { AppFileSystem } from "@opencode-ai/core/filesystem"
 
 export const Parameters = Schema.Struct({})
+
+export const PLAN_EXIT_METADATA_KIND = "plan_exit"
+export const IMPLEMENT_PLAN_OPTION = "Implement plan"
+export const REFINE_PLAN_OPTION = "No, and tell Theos what to do differently"
+
+export type PlanExitMetadata = {
+  kind: typeof PLAN_EXIT_METADATA_KIND
+  planPath: string
+  planMarkdown: string
+  approved?: boolean
+  answer?: string[]
+}
 
 export const PlanExitTool = Tool.define(
   "plan_exit",
@@ -17,6 +30,7 @@ export const PlanExitTool = Tool.define(
     const session = yield* Session.Service
     const question = yield* Question.Service
     const provider = yield* Provider.Service
+    const filesystem = yield* AppFileSystem.Service
 
     return {
       description: EXIT_DESCRIPTION,
@@ -25,24 +39,51 @@ export const PlanExitTool = Tool.define(
         Effect.gen(function* () {
           const instance = yield* InstanceState.context
           const info = yield* session.get(ctx.sessionID)
-          const plan = path.relative(instance.worktree, Session.plan(info, instance))
+          const absolutePlanPath = Session.plan(info, instance)
+          const plan = path.relative(instance.worktree, absolutePlanPath)
+          const planMarkdown =
+            (yield* filesystem.readFileStringSafe(absolutePlanPath).pipe(Effect.orElseSucceed(() => undefined))) ?? ""
+          const metadata: PlanExitMetadata = {
+            kind: PLAN_EXIT_METADATA_KIND,
+            planPath: plan,
+            planMarkdown,
+          }
+
+          yield* ctx.metadata({
+            title: "Plan ready for approval",
+            metadata,
+          })
+
           const answers = yield* question.ask({
             sessionID: ctx.sessionID,
             questions: [
               {
-                question: `Plan at ${plan} is complete. Would you like to switch to the build agent and start implementing?`,
-                header: "Build Agent",
-                custom: false,
+                question: "Implement this plan?",
+                header: "Plan",
+                custom: true,
                 options: [
-                  { label: "Yes", description: "Switch to build agent and start implementing the plan" },
-                  { label: "No", description: "Stay with plan agent to continue refining the plan" },
+                  { label: IMPLEMENT_PLAN_OPTION, description: "Switch to build mode and implement the plan" },
+                  { label: REFINE_PLAN_OPTION, description: "Stay in plan mode and describe what should change" },
                 ],
               },
             ],
             tool: ctx.callID ? { messageID: ctx.messageID, callID: ctx.callID } : undefined,
           })
 
-          if (answers[0]?.[0] === "No") yield* new Question.RejectedError()
+          const answer = answers[0] ?? []
+          if (answer[0] !== IMPLEMENT_PLAN_OPTION) {
+            return {
+              title: "Plan needs changes",
+              output: answer.length
+                ? `User requested plan changes:\n${answer.join("\n")}`
+                : "User requested plan changes.",
+              metadata: {
+                ...metadata,
+                approved: false,
+                answer,
+              },
+            }
+          }
 
           const messages = yield* session.messages({ sessionID: ctx.sessionID }).pipe(Effect.orDie)
           const lastUser = messages.findLast((item) => item.info.role === "user" && item.info.model)
@@ -63,14 +104,18 @@ export const PlanExitTool = Tool.define(
             messageID: msg.id,
             sessionID: ctx.sessionID,
             type: "text",
-            text: `The plan at ${plan} has been approved, you can now edit files. Execute the plan`,
+            text: IMPLEMENT_PLAN_OPTION,
             synthetic: true,
           } satisfies MessageV2.TextPart)
 
           return {
             title: "Switching to build agent",
-            output: "User approved switching to build agent. Wait for further instructions.",
-            metadata: {},
+            output: "User approved switching to build agent. Continue in build mode and implement the approved plan.",
+            metadata: {
+              ...metadata,
+              approved: true,
+              answer,
+            },
           }
         }).pipe(Effect.orDie),
     }
