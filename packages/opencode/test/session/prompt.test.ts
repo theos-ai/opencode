@@ -163,7 +163,11 @@ const blockingProcessor = Layer.succeed(
   }),
 )
 
-function makeHttp(input?: { processor?: "blocking" }) {
+function makeHttp(input?: { processor?: "blocking"; experimentalPlanMode?: boolean }) {
+  const runtimeFlags = RuntimeFlags.layer({
+    experimentalEventSystem: true,
+    ...(input?.experimentalPlanMode ? { experimentalPlanMode: true } : {}),
+  })
   const deps = Layer.mergeAll(
     Session.defaultLayer,
     Snapshot.defaultLayer,
@@ -193,7 +197,7 @@ function makeHttp(input?: { processor?: "blocking" }) {
     Layer.provide(Reference.defaultLayer),
     Layer.provide(Ripgrep.defaultLayer),
     Layer.provide(Format.defaultLayer),
-    Layer.provide(RuntimeFlags.layer({ experimentalEventSystem: true })),
+    Layer.provide(runtimeFlags),
     Layer.provideMerge(todo),
     Layer.provideMerge(question),
     Layer.provideMerge(deps),
@@ -201,15 +205,15 @@ function makeHttp(input?: { processor?: "blocking" }) {
   const trunc = Truncate.layer.pipe(Layer.provideMerge(deps))
   const proc =
     input?.processor === "blocking"
-      ? blockingProcessor
-      : SessionProcessor.layer.pipe(
-          Layer.provide(summary),
-          Layer.provide(Image.defaultLayer),
-          Layer.provide(RuntimeFlags.layer({ experimentalEventSystem: true })),
-          Layer.provideMerge(deps),
-        )
+        ? blockingProcessor
+        : SessionProcessor.layer.pipe(
+            Layer.provide(summary),
+            Layer.provide(Image.defaultLayer),
+            Layer.provide(runtimeFlags),
+            Layer.provideMerge(deps),
+          )
   const compact = SessionCompaction.layer.pipe(
-    Layer.provide(RuntimeFlags.layer({ experimentalEventSystem: true })),
+    Layer.provide(runtimeFlags),
     Layer.provideMerge(proc),
     Layer.provideMerge(deps),
   )
@@ -227,7 +231,7 @@ function makeHttp(input?: { processor?: "blocking" }) {
       Layer.provideMerge(trunc),
       Layer.provide(Instruction.defaultLayer),
       Layer.provide(SystemPrompt.defaultLayer),
-      Layer.provide(RuntimeFlags.layer({ experimentalEventSystem: true })),
+      Layer.provide(runtimeFlags),
       Layer.provideMerge(deps),
     ),
   ).pipe(Layer.provide(summary))
@@ -235,6 +239,7 @@ function makeHttp(input?: { processor?: "blocking" }) {
 
 const it = testEffect(makeHttp())
 const race = testEffect(makeHttp({ processor: "blocking" }))
+const planIt = testEffect(makeHttp({ experimentalPlanMode: true }))
 const unix = process.platform !== "win32" ? it.instance : it.instance.skip
 
 // Config that registers a custom "test" provider with a "test-model" model
@@ -515,6 +520,39 @@ it.instance(
           expect.objectContaining({ type: "synthetic", text: "note content" }),
         ]),
       )
+    }),
+  { git: true },
+)
+
+planIt.instance(
+  "injects plan reminder that gates unresolved decisions behind native questions",
+  () =>
+    Effect.gen(function* () {
+      const { llm } = yield* useServerConfig(providerCfg)
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const chat = yield* sessions.create({ title: "Plan gate" })
+
+      const msg = yield* prompt.prompt({
+        sessionID: chat.id,
+        agent: "plan",
+        noReply: true,
+        parts: [{ type: "text", text: "make a plan" }],
+      })
+      yield* llm.text("done")
+      yield* prompt.loop({ sessionID: chat.id })
+
+      if (msg.info.role !== "user") throw new Error("expected user message")
+      const stored = yield* MessageV2.get({ sessionID: chat.id, messageID: msg.info.id })
+      const reminder = stored.parts.find(
+        (part): part is MessageV2.TextPart =>
+          part.type === "text" && part.synthetic === true && part.text.includes("Unresolved Decision Gate"),
+      )
+
+      expect(reminder?.text).toContain("use the question tool")
+      expect(reminder?.text).toContain("Do NOT put unresolved choices in the plan file")
+      expect(reminder?.text).toContain("Do NOT call plan_exit")
+      yield* sessions.remove(chat.id)
     }),
   { git: true },
 )

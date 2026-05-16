@@ -18,6 +18,8 @@ Ask the user clarifying questions or ask for their opinion when weighing tradeof
 
 **NOTE:** At any point in time through this workflow you should feel free to ask the user questions or clarifications. Don't make large assumptions about user intent. The goal is to present a well researched plan to the user, and tie any loose ends before implementation begins.
 
+**Unresolved Decision Gate:** If the user's request or latest refinement leaves any required decision unresolved, ask the user before finalizing the plan. This includes impossible or insufficient constraints, cases where you would need to relax/broaden/substitute constraints, multiple viable approaches without a clear user choice, or revisions that invalidate the current plan. Do NOT put "Decision Needed", "Option A/B/C", "choose one", or unresolved alternatives in the plan. Ask a native question with clear options, wait for the answer, then write the final plan.
+
 ---
 
 ## Important

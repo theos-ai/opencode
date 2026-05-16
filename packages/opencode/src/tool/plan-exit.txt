@@ -11,3 +11,5 @@ Do NOT call this tool:
 - Before you have created or finalized the plan
 - If you still have unanswered questions about the implementation
 - If the user has indicated they want to continue planning
+- If the plan contains unresolved alternatives, "Decision Needed" sections, "Option A/B/C" choices, or any other decision the user still needs to make
+- If a requested constraint conflicts with discovered facts or requires broadening/changing the user's ask; ask a native question first and wait for the answer

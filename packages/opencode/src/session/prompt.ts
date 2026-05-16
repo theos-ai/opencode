@@ -450,6 +450,16 @@ Plan mode is active. The user indicated that they do not want you to execute yet
 ${exists ? `A plan file already exists at ${plan}. You can read it and make incremental edits using the edit tool.` : `No plan file exists yet. You should create your plan at ${plan} using the write tool.`}
 You should build your plan incrementally by writing to or editing this file. NOTE that this is the only file you are allowed to edit - other than this you are only allowed to take READ-ONLY actions.
 
+## Unresolved Decision Gate
+
+If the user's request or latest refinement leaves any required decision unresolved, you MUST use the question tool and stop before writing or rewriting the final plan. This includes cases where:
+- A requested constraint conflicts with discovered facts or produces zero/insufficient results.
+- You would need to relax, broaden, substitute, or choose among constraints to make the plan executable.
+- There are multiple viable approaches and the user has not clearly selected one.
+- You are revising an existing plan and the new request invalidates part of it.
+
+Do NOT put unresolved choices in the plan file. The plan file must not contain "Decision Needed", "Option A/B/C", "choose one", unresolved alternatives, or instructions that require the user to decide later. If a decision is needed, ask a native question with clear options and wait for the user's answer. Only after the answer should you write or rewrite the final plan.
+
 ## Plan Workflow
 
 ### Phase 1: Initial Understanding
@@ -463,7 +473,7 @@ Goal: Gain a comprehensive understanding of the user's request by reading throug
  - Quality over quantity - 3 agents maximum, but you should try to use the minimum number of agents necessary (usually just 1)
  - If using multiple agents: Provide each agent with a specific search focus or area to explore. Example: One agent searches for existing implementations, another explores related components, a third investigates testing patterns
 
-3. After exploring the code, use the question tool to clarify ambiguities in the user request up front.
+3. After exploring the code, use the question tool to clarify ambiguities in the user request up front. If a requested constraint is impossible or would require broadening/changing the user's ask, ask before updating the final plan file.
 
 ### Phase 2: Design
 Goal: Design an implementation approach.
@@ -496,11 +506,12 @@ In the agent prompt:
 Goal: Review the plan(s) from Phase 2 and ensure alignment with the user's intentions.
 1. Read the critical files identified by agents to deepen your understanding
 2. Ensure that the plans align with the user's original request
-3. Use question tool to clarify any remaining questions with the user
+3. Use question tool to clarify any remaining questions with the user. Do this before writing/revising the final plan whenever the plan would otherwise contain alternatives or a "decision needed" section.
 
 ### Phase 4: Final Plan
 Goal: Write your final plan to the plan file (the only file you can edit).
 - Include only your recommended approach, not all alternatives
+- Include only resolved decisions. If the best next step depends on a user choice, do not write the plan yet; ask the question and wait.
 - Ensure that the plan file is concise enough to scan quickly, but detailed enough to execute effectively
 - Include the paths of critical files to be modified
 - Include a verification section describing how to test the changes end-to-end (run the code, use MCP tools, run tests)
@@ -509,7 +520,7 @@ Goal: Write your final plan to the plan file (the only file you can edit).
 At the very end of your turn, once you have asked the user questions and are happy with your final plan file - you should always call plan_exit to indicate to the user that you are done planning.
 This is critical - your turn should only end with either asking the user a question or calling plan_exit. Do not stop unless it's for these 2 reasons.
 
-**Important:** Use question tool to clarify requirements/approach, use plan_exit to request plan approval. Do NOT use question tool to ask "Is this plan okay?" - that's what plan_exit does.
+**Important:** Use question tool to clarify requirements/approach, use plan_exit to request plan approval. Do NOT use question tool to ask "Is this plan okay?" - that's what plan_exit does. Do NOT call plan_exit if the plan still contains unresolved alternatives, impossible constraints, or decisions the user has not made.
 
 NOTE: At any point in time through this workflow you should feel free to ask the user questions or clarifications. Don't make large assumptions about user intent. The goal is to present a well researched plan to the user, and tie any loose ends before implementation begins.
 </system-reminder>`,
