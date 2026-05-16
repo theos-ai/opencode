@@ -105,7 +105,6 @@ export const PlanExitTool = Tool.define(
             sessionID: ctx.sessionID,
             type: "text",
             text: IMPLEMENT_PLAN_OPTION,
-            synthetic: true,
           } satisfies MessageV2.TextPart)
 
           return {
