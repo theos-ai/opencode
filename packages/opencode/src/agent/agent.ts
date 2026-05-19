@@ -145,6 +145,7 @@ export const layer = Layer.effect(
             options: {},
             permission: Permission.merge(
               defaults,
+              user,
               Permission.fromConfig({
                 question: "allow",
                 plan_exit: "allow",
@@ -157,7 +158,6 @@ export const layer = Layer.effect(
                   [path.relative(ctx.worktree, path.join(Global.Path.data, path.join("plans", "*.md")))]: "allow",
                 },
               }),
-              user,
             ),
             mode: "primary",
             native: true,
