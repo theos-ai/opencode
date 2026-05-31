@@ -82,6 +82,12 @@ const STRUCTURED_OUTPUT_SYSTEM_PROMPT = `IMPORTANT: The user has requested struc
 
 const log = Log.create({ service: "session.prompt" })
 const elog = EffectLogger.create({ service: "session.prompt" })
+const PLAN_FILE_EDIT_PERMISSION_NAMES = new Set(["edit", "write", "apply_patch"])
+
+function sanitizePlanSessionPermission(agent: Agent.Info, ruleset?: Permission.Ruleset): Permission.Ruleset | undefined {
+  if (agent.name !== "plan" || !ruleset) return ruleset
+  return ruleset.filter((rule) => !PLAN_FILE_EDIT_PERMISSION_NAMES.has(rule.permission))
+}
 
 type ReferencePromptMetadata = {
   name: string
@@ -572,7 +578,10 @@ NOTE: At any point in time through this workflow you should feel free to ask the
               ...req,
               sessionID: input.session.id,
               tool: { messageID: input.processor.message.id, callID: options.toolCallId },
-              ruleset: Permission.merge(input.agent.permission, input.session.permission ?? []),
+              ruleset: Permission.merge(
+                input.agent.permission,
+                sanitizePlanSessionPermission(input.agent, input.session.permission) ?? [],
+              ),
             })
             .pipe(Effect.orDie),
       })
@@ -1632,9 +1641,10 @@ NOTE: At any point in time through this workflow you should feel free to ask the
 
       const permissions: Permission.Ruleset = []
       for (const [t, enabled] of Object.entries(input.tools ?? {})) {
+        if (message.info.agent === "plan" && PLAN_FILE_EDIT_PERMISSION_NAMES.has(t)) continue
         permissions.push({ permission: t, action: enabled ? "allow" : "deny", pattern: "*" })
       }
-      if (permissions.length > 0) {
+      if (permissions.length > 0 || input.tools !== undefined) {
         session.permission = permissions
         yield* sessions.setPermission({ sessionID: session.id, permission: permissions })
       }

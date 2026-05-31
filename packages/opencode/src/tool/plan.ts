@@ -43,6 +43,9 @@ export const PlanExitTool = Tool.define(
           const plan = path.relative(instance.worktree, absolutePlanPath)
           const planMarkdown =
             (yield* filesystem.readFileStringSafe(absolutePlanPath).pipe(Effect.orElseSucceed(() => undefined))) ?? ""
+          if (!planMarkdown.trim()) {
+            throw new Error("Plan file is empty. Write the complete plan file before calling plan_exit.")
+          }
           const metadata: PlanExitMetadata = {
             kind: PLAN_EXIT_METADATA_KIND,
             planPath: plan,

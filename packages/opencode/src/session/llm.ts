@@ -27,10 +27,20 @@ import * as OtelTracer from "@effect/opentelemetry/Tracer"
 const log = Log.create({ service: "llm" })
 export const OUTPUT_TOKEN_MAX = ProviderTransform.OUTPUT_TOKEN_MAX
 type Result = Awaited<ReturnType<typeof streamText>>
+const PLAN_FILE_EDIT_TOOL_NAMES = new Set(["edit", "write", "apply_patch"])
 
 // Avoid re-instantiating remeda's deep merge types in this hot LLM path; the runtime behavior is still mergeDeep.
 const mergeOptions = (target: Record<string, any>, source: Record<string, any> | undefined): Record<string, any> =>
   mergeDeep(target, source ?? {}) as Record<string, any>
+
+function planSessionPermission(input: Pick<StreamInput, "agent" | "permission">): Permission.Ruleset | undefined {
+  if (input.agent.name !== "plan" || !input.permission) return input.permission
+  return input.permission.filter((rule) => !PLAN_FILE_EDIT_TOOL_NAMES.has(rule.permission))
+}
+
+function planToolOverrideDisabled(input: Pick<StreamInput, "agent">, toolName: string): boolean {
+  return input.agent.name === "plan" && PLAN_FILE_EDIT_TOOL_NAMES.has(toolName)
+}
 
 export type StreamInput = {
   user: MessageV2.User
@@ -248,7 +258,7 @@ const live: Layer.Layer<
           }
         }
 
-        const ruleset = Permission.merge(input.agent.permission ?? [], input.permission ?? [])
+        const ruleset = Permission.merge(input.agent.permission ?? [], planSessionPermission(input) ?? [])
         workflowModel.sessionPreapprovedTools = Object.keys(sortedTools).filter((name) => {
           const match = ruleset.findLast((rule) => Wildcard.match(name, rule.permission))
           return !match || match.action !== "ask"
@@ -439,9 +449,13 @@ export const defaultLayer = Layer.suspend(() =>
 function resolveTools(input: Pick<StreamInput, "tools" | "agent" | "permission" | "user">) {
   const disabled = Permission.disabled(
     Object.keys(input.tools),
-    Permission.merge(input.agent.permission, input.permission ?? []),
+    Permission.merge(input.agent.permission, planSessionPermission(input) ?? []),
   )
-  return Record.filter(input.tools, (_, k) => input.user.tools?.[k] !== false && !disabled.has(k))
+  return Record.filter(
+    input.tools,
+    (_, toolName) =>
+      (planToolOverrideDisabled(input, toolName) || input.user.tools?.[toolName] !== false) && !disabled.has(toolName),
+  )
 }
 
 // Check if messages contain any tool-call content
