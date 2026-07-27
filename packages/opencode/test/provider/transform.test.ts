@@ -4111,6 +4111,15 @@ describe("ProviderTransform.variants", () => {
         expectedHigh: { thinking: { type: "adaptive", display: "summarized" }, effort: "high" },
       },
       {
+        // Bare-major ids have no minor component; a major-and-minor-only pattern silently
+        // demoted these to the legacy budgetTokens fallback, which Anthropic now rejects with
+        // 'thinking.type.enabled is not supported for this model'.
+        name: "opus 5",
+        apiIds: ["claude-opus-5", "claude-opus-5-fast", "claude-opus-5-20260115", "claude-5-opus"],
+        efforts: ["low", "medium", "high", "xhigh", "max"],
+        expectedHigh: { thinking: { type: "adaptive", display: "summarized" }, effort: "high" },
+      },
+      {
         name: "fable 5",
         apiIds: ["claude-fable-5"],
         efforts: ["low", "medium", "high", "xhigh", "max"],

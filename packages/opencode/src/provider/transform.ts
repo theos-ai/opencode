@@ -600,10 +600,14 @@ function openaiCompatibleReasoningEfforts(id: string) {
 function anthropicOpus47OrLater(apiId: string) {
   // Matches "opus-4.7" (Anthropic/Bedrock/Vertex) and "claude-4.7-opus" (SAP AI Core inverted).
   // Greedy \d+ correctly extends to multi-digit majors (e.g. "claude-10.0-opus") for forward compatibility.
-  const version = /opus-(\d+)[.-](\d+)(?:[.@-]|$)|claude-(\d+)[.-](\d+)-opus(?:[.@-]|$)/i.exec(apiId)
+  // The minor is optional so bare majors ("claude-opus-5") are recognised, matching
+  // anthropicSonnet5OrLater; it is capped at 2 digits so a date suffix ("claude-opus-5-20260115")
+  // is not mistaken for a minor version.
+  const version =
+    /opus-(\d+)(?:[.-](\d{1,2}))?(?:[.@-]|$)|claude-(\d+)(?:[.-](\d{1,2}))?-opus(?:[.@-]|$)/i.exec(apiId)
   if (!version) return false
   const major = Number(version[1] ?? version[3])
-  const minor = Number(version[2] ?? version[4])
+  const minor = Number(version[2] ?? version[4] ?? 0)
   return major > 4 || (major === 4 && minor >= 7)
 }
 
