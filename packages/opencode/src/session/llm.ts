@@ -301,6 +301,25 @@ const live: Layer.Layer<
                 toolName: lower,
               }
             }
+            // Theos: models occasionally emit structurally broken JSON on large
+            // argument payloads (observed live: a 20KB strategy document with an
+            // unclosed table array bricked a whole authoring run). Try a real
+            // JSON repair before demoting the call to `invalid` — a repaired
+            // call re-enters normal schema validation, so this can only turn a
+            // guaranteed failure into a possible success.
+            if (prepared.tools[failed.toolCall.toolName] && typeof failed.toolCall.input === "string") {
+              try {
+                const { jsonrepair } = await import("jsonrepair")
+                const repaired = jsonrepair(failed.toolCall.input)
+                JSON.parse(repaired)
+                return {
+                  ...failed.toolCall,
+                  input: repaired,
+                }
+              } catch {
+                // fall through to the invalid-tool demotion below
+              }
+            }
             return {
               ...failed.toolCall,
               input: JSON.stringify({
