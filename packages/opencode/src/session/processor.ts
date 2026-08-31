@@ -319,9 +319,23 @@ const layer = Layer.effect(
             yield* ensureToolCall(value)
             return
 
-          case "tool-input-delta":
-            yield* ensureToolCall(value)
+          case "tool-input-delta": {
+            const { call } = yield* ensureToolCall(value)
+            // Theos: publish streaming tool-call arguments on the in-process bus so
+            // worker plugins can preview long generations (campaign plan streaming).
+            // Publish-only — nothing is persisted, and the backend wire drops
+            // non-text-block deltas, so browsers never see these frames.
+            if (value.text) {
+              yield* session.updatePartDelta({
+                sessionID: call.sessionID,
+                messageID: call.messageID,
+                partID: call.partID,
+                field: "raw",
+                delta: value.text,
+              })
+            }
             return
+          }
 
           case "tool-input-end": {
             yield* ensureToolCall(value)
