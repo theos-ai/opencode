@@ -206,7 +206,11 @@ export const TaskTool = Tool.define(
             modelID: model.modelID,
             providerID: model.providerID,
           },
-          variant: next.model ? undefined : variant,
+          // Never the parent's variant, even on the parent's model. Subagents return long final
+          // answers, and a max-effort variant inherited from the chat once spent a subagent's whole
+          // output budget on reasoning and returned nothing. Without one, the prompt uses the
+          // subagent's own configured variant (with its own model) or the model's default effort.
+          variant: undefined,
           agent: next.name,
           parts,
         })

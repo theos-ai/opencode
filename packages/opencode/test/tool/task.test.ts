@@ -251,8 +251,54 @@ describe("tool.task", () => {
       expect(result.metadata.sessionId).toBe(child.id)
       expect(result.output).toContain(`<task id="${child.id}" state="completed">`)
       expect(seen?.sessionID).toBe(child.id)
-      expect(seen?.variant).toBe("xhigh")
+      expect(seen?.variant).toBeUndefined()
     }),
+  )
+
+  it.instance(
+    "subagents run the parent's model or their own, never the parent's variant",
+    () =>
+      Effect.gen(function* () {
+        const { chat, assistant } = yield* seed()
+        const tool = yield* TaskTool
+        const def = yield* tool.init()
+        const seen: SessionPrompt.PromptInput[] = []
+        const promptOps = stubOps({ onPrompt: (input) => seen.push(input) })
+        const run = (subagent_type: string) =>
+          def.execute(
+            { description: "inspect bug", prompt: "look into the cache key path", subagent_type },
+            {
+              sessionID: chat.id,
+              messageID: assistant.id,
+              agent: "build",
+              abort: new AbortController().signal,
+              extra: { promptOps },
+              messages: [],
+              metadata: () => Effect.void,
+              ask: () => Effect.void,
+            },
+          )
+
+        yield* run("general")
+        yield* run("pinned")
+
+        expect(seen.map((input) => input.model)).toEqual([
+          { providerID: ref.providerID, modelID: ref.modelID },
+          { providerID: ProviderV2.ID.make("other"), modelID: ModelV2.ID.make("other-model") },
+        ])
+        // The parent turn ran on "xhigh"; neither subagent inherits it.
+        expect(seen.map((input) => input.variant)).toEqual([undefined, undefined])
+      }),
+    {
+      config: {
+        agent: {
+          pinned: {
+            mode: "subagent",
+            model: "other/other-model",
+          },
+        },
+      },
+    },
   )
 
   it.instance("execute asks by default and skips checks when bypassed", () =>
