@@ -181,7 +181,14 @@ export const Plugin = {
                 )
               }
 
-              const model = override ?? agent.model ?? parent.model
+              // Theos: a child never inherits the parent's reasoning variant. An inherited
+              // max-effort variant spent a subagent's whole output budget on reasoning and
+              // returned nothing, so children run the parent's model at its default effort
+              // unless the agent (or an explicit override) names a variant of its own.
+              const model =
+                override ??
+                agent.model ??
+                (parent.model ? { providerID: parent.model.providerID, id: parent.model.id } : undefined)
               const child =
                 existing ??
                 (yield* sessions
@@ -190,6 +197,10 @@ export const Plugin = {
                     title: input.description,
                     agent: Agent.ID.make(input.agent),
                     model,
+                    // Theos: a child is never more permitted than the session that opened it. The
+                    // session's rules evaluate last, so this is what keeps the parent's denies in
+                    // force under an agent whose own rules say `"*": allow`.
+                    permissions: parent.permissions,
                   })
                   .pipe(
                     Effect.mapError(
